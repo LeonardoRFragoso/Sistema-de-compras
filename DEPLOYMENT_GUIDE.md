@@ -1,172 +1,285 @@
-# 🚀 Guia de Deploy - Sistema de Gestão de Compras Ziran
+# 🚀 Guia de Deploy - Sistema de Gestão de Compras Ziran v2.0
 
-## 📋 Resumo dos Problemas Resolvidos
+## 📋 Arquitetura
 
-### ❌ **Problemas Identificados:**
-1. **Usuários não salvos**: Sistema JSON funcionava, mas sem persistência robusta
-2. **Logout ao refresh**: `st.session_state` é volátil no Streamlit
-3. **Incompatibilidade Streamlit Cloud**: Filesystem efêmero não suporta JSON local
+| Componente | Tecnologia | Porta |
+|------------|-----------|-------|
+| **Backend** | FastAPI + SQLAlchemy | 8000 |
+| **Frontend** | Vue 3 + Vite + TailwindCSS | 80 |
+| **Database** | PostgreSQL 15 | 5432 |
+| **Proxy** | Nginx (no container frontend) | 80 |
 
-### ✅ **Soluções Implementadas:**
-1. **Sistema de banco híbrido**: SQLite local + PostgreSQL para cloud
-2. **Sessões persistentes**: Sistema de tokens com expiração
-3. **Migração automática**: Script para converter JSON → Database
-4. **Compatibilidade**: Fallback para JSON se banco não disponível
+---
 
-## 🛠️ Arquivos Criados
+## 🔧 Deploy Rápido (Docker)
 
-### **1. `database.py`**
-- Gerenciador de banco de dados híbrido
-- Suporte SQLite (local) e PostgreSQL (cloud)
-- Migração automática de dados JSON
-- Sessões persistentes com expiração
+### **1. Criar arquivo `.env`**
 
-### **2. `session_manager.py`**
-- Gerenciamento de sessões persistentes
-- Login/logout com tokens
-- Restauração automática de sessão
-- Integração com banco de dados
-
-### **3. `migrate_to_db.py`**
-- Script de migração JSON → Database
-- Backup automático dos dados originais
-- Testes de integridade
-- Interface interativa
-
-### **4. `secrets.toml.example`**
-- Template para configurações do Streamlit Cloud
-- Exemplos para PostgreSQL, MongoDB, MySQL
-- Instruções de configuração
-
-## 🔧 Como Usar Localmente
-
-### **1. Instalar Dependências**
 ```bash
-pip install -r requirements.txt
+# Na raiz do projeto, copie o exemplo:
+cp .env.production.example .env
+
+# Edite o arquivo .env:
+nano .env   # ou use seu editor preferido
 ```
 
-### **2. Migrar Dados (Opcional)**
+### **2. Configurar variáveis obrigatórias**
+
+```env
+# OBRIGATÓRIO - Gere com: python -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY=sua_chave_segura_aqui_64_caracteres_hex
+
+# OBRIGATÓRIO - Senha do banco de dados
+POSTGRES_PASSWORD=sua_senha_forte_do_banco
+
+# Opcional - ajuste conforme necessário
+CORS_ORIGINS=http://localhost,http://seu-dominio.com
+```
+
+### **3. Iniciar os containers**
+
 ```bash
-python migrate_to_db.py migrate
+# Build e start
+docker-compose up -d --build
+
+# Verificar status
+docker-compose ps
+
+# Ver logs
+docker-compose logs -f backend
 ```
 
-### **3. Executar Aplicação**
+### **4. Acessar o sistema**
+
+- **Frontend:** http://localhost
+- **API Docs:** http://localhost:8000/api/docs
+- **Health Check:** http://localhost:8000/health
+
+### **5. Login inicial**
+
+```
+Usuário: admin
+Senha: admin123 (ALTERE IMEDIATAMENTE)
+```
+
+---
+
+## 🔐 Segurança em Produção
+
+### **Checklist Obrigatório**
+
+- [ ] SECRET_KEY gerada com `secrets.token_hex(32)`
+- [ ] POSTGRES_PASSWORD forte (mín. 16 caracteres)
+- [ ] Arquivo `.env` NÃO commitado no Git
+- [ ] DEBUG=false
+- [ ] ENVIRONMENT=production
+- [ ] CORS_ORIGINS apenas domínios permitidos
+- [ ] Senha do admin alterada no primeiro acesso
+
+### **Gerar SECRET_KEY Segura**
+
 ```bash
-streamlit run app.py
+# Windows PowerShell
+python -c "import secrets; print(secrets.token_hex(32))"
+
+# Linux/Mac
+openssl rand -hex 32
 ```
 
-## ☁️ Deploy no Streamlit Cloud
+### **Exemplo de Senha Forte**
 
-### **1. Configurar Banco de Dados**
-
-#### **Opção A: PostgreSQL (Recomendado)**
-- Criar conta no [Supabase](https://supabase.com) ou [Railway](https://railway.app)
-- Obter credenciais de conexão
-- Criar arquivo `.streamlit/secrets.toml`:
-
-```toml
-[database]
-host = "your-host.supabase.co"
-name = "postgres"
-user = "postgres"
-password = "your-password"
-port = "5432"
-```
-
-#### **Opção B: MongoDB Atlas**
-```toml
-[mongodb]
-connection_string = "mongodb+srv://user:pass@cluster.mongodb.net/db"
-```
-
-### **2. Deploy no Streamlit Cloud**
-1. Fazer push do código para GitHub
-2. Conectar repositório no [Streamlit Cloud](https://share.streamlit.io)
-3. Adicionar secrets via interface web
-4. Deploy automático
-
-### **3. Migração de Dados**
-- Dados JSON serão migrados automaticamente na primeira execução
-- Usuário admin criado automaticamente: `admin` / `admin123`
-
-## 🔒 Funcionalidades de Sessão
-
-### **Sessões Persistentes**
-- ✅ Login mantido após refresh da página
-- ✅ Expiração automática (24h por padrão)
-- ✅ Logout seguro com limpeza de tokens
-- ✅ Múltiplas sessões simultâneas
-
-### **Segurança**
-- ✅ Senhas hasheadas com salt
-- ✅ Tokens UUID únicos
-- ✅ Validação de expiração
-- ✅ Limpeza automática de sessões expiradas
-
-## 📊 Estrutura do Banco
-
-### **Tabelas Criadas:**
-- `usuarios`: Dados de usuários e autenticação
-- `solicitacoes`: Solicitações de compra (futuro)
-- `configuracoes`: Configurações do sistema
-- `notificacoes`: Sistema de notificações
-- `sessoes`: Sessões persistentes
-
-## 🔄 Compatibilidade
-
-### **Modo Híbrido**
-- Se banco disponível: Usa database + sessões persistentes
-- Se banco indisponível: Fallback para JSON + session_state
-- Migração transparente entre modos
-
-### **Dados Existentes**
-- JSON mantido para compatibilidade
-- Migração não destrutiva
-- Backup automático criado
-
-## 🧪 Testes
-
-### **Testar Localmente:**
 ```bash
-python migrate_to_db.py test
+# Gerar senha aleatória para banco
+python -c "import secrets; print(secrets.token_urlsafe(24))"
 ```
 
-### **Verificar Funcionalidades:**
-1. ✅ Criação de usuários
-2. ✅ Login/logout
-3. ✅ Persistência de sessão
-4. ✅ Refresh da página
-5. ✅ Múltiplos usuários
+---
+
+## 📁 Estrutura de Arquivos
+
+```
+Sistema-de-compras/
+├── .env                    # ⚠️ Variáveis sensíveis (NÃO COMMITAR)
+├── .env.production.example # Template de configuração
+├── docker-compose.yml      # Orquestração dos containers
+├── backend/
+│   ├── Dockerfile
+│   ├── app/
+│   ├── alembic/
+│   └── requirements.txt
+└── frontend/
+    ├── Dockerfile
+    ├── nginx.conf
+    └── src/
+```
+
+---
+
+## 🛠️ Comandos Úteis
+
+### **Docker**
+
+```bash
+# Parar todos os containers
+docker-compose down
+
+# Parar e remover volumes (APAGA DADOS!)
+docker-compose down -v
+
+# Rebuild apenas backend
+docker-compose up -d --build backend
+
+# Entrar no container
+docker exec -it compras_backend bash
+
+# Ver logs em tempo real
+docker-compose logs -f
+```
+
+### **Banco de Dados**
+
+```bash
+# Backup do banco
+docker exec compras_db pg_dump -U compras_user compras_ziran > backup.sql
+
+# Restaurar backup
+docker exec -i compras_db psql -U compras_user compras_ziran < backup.sql
+
+# Acessar psql
+docker exec -it compras_db psql -U compras_user -d compras_ziran
+```
+
+### **Migrations (Alembic)**
+
+```bash
+# Dentro do container backend
+docker exec -it compras_backend bash
+alembic upgrade head
+alembic revision --autogenerate -m "descricao"
+```
+
+---
+
+## 🌐 Deploy com HTTPS (Produção Real)
+
+### **Opção 1: Reverse Proxy (Nginx/Traefik)**
+
+```nginx
+# /etc/nginx/sites-available/compras
+server {
+    listen 443 ssl;
+    server_name compras.seudominio.com;
+    
+    ssl_certificate /etc/letsencrypt/live/compras.seudominio.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/compras.seudominio.com/privkey.pem;
+    
+    location / {
+        proxy_pass http://localhost:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+    
+    location /api {
+        proxy_pass http://localhost:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+### **Opção 2: Cloudflare Tunnel**
+
+```bash
+cloudflared tunnel --url http://localhost:80
+```
+
+---
 
 ## 🚨 Troubleshooting
 
-### **Erro: "Módulos de banco não encontrados"**
-- Instalar dependências: `pip install psycopg2-binary`
-- Verificar imports em `database.py`
+### **Container não inicia**
 
-### **Erro: "Conexão com banco falhou"**
-- Verificar credenciais em `secrets.toml`
-- Testar conectividade de rede
-- Verificar firewall/VPN
+```bash
+# Verificar logs
+docker-compose logs backend
 
-### **Logout automático**
-- Verificar se sessões estão sendo criadas
-- Checar logs de erro no console
-- Validar expiração de tokens
+# Erros comuns:
+# - "SECRET_KEY não definida" → Criar arquivo .env
+# - "POSTGRES_PASSWORD não definida" → Adicionar senha no .env
+# - "Connection refused" → Aguardar DB healthcheck
+```
 
-## 📈 Próximos Passos
+### **Erro de CORS**
 
-1. **Migrar solicitações**: Mover dados de solicitações para banco
-2. **Dashboard avançado**: Relatórios com dados do banco
-3. **API REST**: Endpoints para integração externa
-4. **Backup automático**: Rotinas de backup agendadas
-5. **Auditoria**: Log de ações dos usuários
+```bash
+# Verificar CORS_ORIGINS no .env
+CORS_ORIGINS=http://localhost,http://seu-ip:80
+```
 
-## 🎯 Benefícios Alcançados
+### **Migrations não aplicadas**
 
-- ✅ **Persistência robusta**: Dados salvos permanentemente
-- ✅ **Sessões estáveis**: Sem logout ao refresh
-- ✅ **Cloud-ready**: Compatível com Streamlit Cloud
-- ✅ **Escalabilidade**: Suporte a múltiplos usuários
-- ✅ **Segurança**: Autenticação e sessões seguras
-- ✅ **Flexibilidade**: Funciona local e cloud
+```bash
+docker exec -it compras_backend alembic upgrade head
+```
+
+### **Reset completo (desenvolvimento)**
+
+```bash
+docker-compose down -v
+docker-compose up -d --build
+```
+
+---
+
+## 📊 Monitoramento
+
+### **Health Checks**
+
+```bash
+# Backend
+curl http://localhost:8000/health
+
+# Database (via backend)
+curl http://localhost:8000/api/v1/dashboard/resumo
+```
+
+### **Logs Estruturados**
+
+Os logs do backend incluem:
+- Timestamp
+- Método HTTP
+- Path
+- Status code
+- Duração (ms)
+- IP do cliente
+
+---
+
+## ✅ Checklist GO-LIVE
+
+### **Pré-Deploy**
+
+- [ ] `.env` criado com todas variáveis
+- [ ] SECRET_KEY segura (64 chars hex)
+- [ ] POSTGRES_PASSWORD forte
+- [ ] Migrations aplicadas
+- [ ] Testes funcionais OK
+
+### **Pós-Deploy**
+
+- [ ] Alterar senha do admin
+- [ ] Verificar health check
+- [ ] Testar login/logout
+- [ ] Testar criação de solicitação
+- [ ] Testar fluxo de aprovação
+- [ ] Configurar backup automático
+
+---
+
+## 📞 Suporte
+
+Em caso de problemas:
+1. Verificar logs: `docker-compose logs -f`
+2. Verificar `.env` está configurado
+3. Verificar containers: `docker-compose ps`
+4. Reiniciar: `docker-compose restart`
